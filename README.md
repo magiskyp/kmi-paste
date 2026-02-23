@@ -2,6 +2,8 @@
 
 Obsidian plugin that handles `obsidian://kmi` URI links to fetch content from [kmi.aeza.net](https://kmi.aeza.net) and write it into a note.
 
+> 🤖 This plugin was built by [Claude](https://claude.ai) (Anthropic).
+
 ## URI Format
 
 ```
