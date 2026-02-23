@@ -24,6 +24,32 @@ __export(main_exports, {
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian = require("obsidian");
+async function decryptAesGcm(ciphertext, password) {
+  const raw = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
+  const salt = raw.slice(0, 16);
+  const iv = raw.slice(16, 28);
+  const data = raw.slice(28);
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  const aesKey = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 1e5, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"]
+  );
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    data
+  );
+  return new TextDecoder().decode(decrypted);
+}
 var KmiPastePlugin = class extends import_obsidian.Plugin {
   async onload() {
     this.registerObsidianProtocolHandler("kmi", async (params) => {
@@ -46,7 +72,8 @@ var KmiPastePlugin = class extends import_obsidian.Plugin {
     }
     const path = (_a = raw["path"]) != null ? _a : "";
     const append = raw["append"] === "true";
-    return { file, path, append, url };
+    const key = raw["key"];
+    return { file, path, append, url, key };
   }
   buildFilePath(params) {
     let filename = params.file;
@@ -91,6 +118,14 @@ var KmiPastePlugin = class extends import_obsidian.Plugin {
       const msg = err instanceof Error ? err.message : String(err);
       new import_obsidian.Notice(`KMI: failed to fetch content \u2014 ${msg}`);
       return;
+    }
+    if (params.key) {
+      try {
+        content = await decryptAesGcm(content.trim(), params.key);
+      } catch (err) {
+        new import_obsidian.Notice("KMI: decryption failed \u2014 wrong key or corrupted data");
+        return;
+      }
     }
     const filePath = this.buildFilePath(params);
     const folderPath = filePath.includes("/") ? filePath.substring(0, filePath.lastIndexOf("/")) : "";
